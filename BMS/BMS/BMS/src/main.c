@@ -72,6 +72,8 @@ void rtc_match_callback(void);
 void configure_rtc_callbacks(void);
 void configure_tsens(void);
 
+
+static void can_send_standard_message(uint32_t id_value, uint8_t *data, uint32_t data_length);
 static void can_fd_send_extended_message(uint32_t id_value, uint8_t *data);
 
 //! [module_var]
@@ -103,7 +105,23 @@ static struct can_rx_element_buffer rx_element_buffer;
 //! [can_receive_message_setting]
 
 //![temperature result]
-int32_t temp_result;
+//int32_t temp_result;
+
+enum commandType {
+	commandType_null,
+	commandType_set,
+	commandType_request,
+	commandType_response,
+	commandType_report
+};
+
+enum commandAction{
+	commandAction_null,
+	commandAction_time,
+	commandAction_data
+};
+
+
 
 
 #define CMD_TYPE_REQUEST    0x01
@@ -278,7 +296,7 @@ void configure_adc(void)
 
 	config_adc.clock_source = GCLK_GENERATOR_0;
 	config_adc.clock_prescaler = ADC_CLOCK_PRESCALER_DIV16;
-	config_adc.reference =  ADC_REFERENCE_INTVCC1;
+	config_adc.reference =  ADC_REFERENCE_INTVCC0;
 	config_adc.positive_input = ADC_POSITIVE_INPUT_PIN8;
 	config_adc.negative_input = ADC_NEGATIVE_INPUT_GND;
 	config_adc.sample_length = ADC_TEMP_SAMPLE_LENGTH;
@@ -307,6 +325,8 @@ void adc_sampling(void)
 		} while (adc_read(&adc_instance, &discharge_signal_adc_result) == STATUS_BUSY);	
 		
 		printf("\n\r Discharge_signal_adc_result is: %d \r\n",discharge_signal_adc_result);
+		printf("\n\r Voltage is: %d mv \r\n",discharge_signal_adc_result*3000/4096);
+		printf("\n\r Current is: %d ma \r\n",discharge_signal_adc_result*3000/(4096*13));
  		total_discharge_current += discharge_signal_adc_result;
 		discharge_sample_num ++;
 		//udi_cdc_write_buf(&string2,1);				
@@ -326,6 +346,7 @@ void adc_sampling(void)
 		} while (adc_read(&adc_instance, &charge_signal_adc_result) == STATUS_BUSY);
 		
 		printf("\n\r Charge_signal_adc_result is: %d \r\n",charge_signal_adc_result);
+		printf("\n\r Voltage is: %d mv \r\n",charge_signal_adc_result*3000/(4096));
 		total_charge_current += charge_signal_adc_result;
 		charge_sample_num++;
 		//udi_cdc_write_buf(&string1,1);
@@ -340,10 +361,11 @@ uint8_t battery_status_update(void)
 {
 	if (charger_status == 1)
 	{
+		printf("\n\rcharge_signal_adc_result %d \r\n",  charge_signal_adc_result);
 		if (charge_signal_adc_result > 0x00ff)
 		{
 			battery_status = 1; //charging, battery is not full
-			
+			printf("\n\r here*********** \n\r");
 			//the followed discharge is not from 100% remain.
 			discharge_from_full_flag = 0;
 		}
@@ -400,34 +422,38 @@ void send_battery_data(void)
 {	
 	struct rtc_calendar_time current_time;
 	rtc_calendar_get_time(&rtc_instance, &current_time);
-	battery_data[0] = (uint8_t)((avg_charge_current_reading >> 8) & 0xff);
-	battery_data[1] = (uint8_t)(avg_charge_current_reading & 0xff);
- 	battery_data[2] = (uint8_t)((avg_discharge_current_reading >> 8) & 0xff);
-	battery_data[3] = (uint8_t)(avg_discharge_current_reading & 0xff);
-	battery_data[4] = (uint8_t)((temprerature_value >> 8) & 0xff);
-	battery_data[5] = (uint8_t)(temprerature_value & 0xff);
-	battery_data[6] = charge_remain_percentage;
-	battery_data[7] = battery_status;
-	battery_data[8] = charger_status;
-	battery_data[9] = (uint8_t)((current_time.year >> 8) & 0xff);
-	battery_data[10] = (uint8_t)(current_time.year & 0xff);
-	battery_data[11] = current_time.month;
-	battery_data[12] = current_time.day;
-	battery_data[13] = current_time.hour;
-	battery_data[14] = current_time.minute;
-	battery_data[15] = current_time.second;
+	battery_data[0] = (uint8_t)(0x01);
+	battery_data[1] = (uint8_t)((avg_charge_current_reading >> 4) & 0xff );
+ 	battery_data[2] = (uint8_t)((avg_discharge_current_reading >> 4) & 0xff);
+	battery_data[3] = (uint8_t)((temprerature_value >> 8) & 0xff);
+	battery_data[4] = (uint8_t)(charge_remain_percentage);
+	battery_data[5] = (uint8_t)((battery_status << 1) | (charger_status & 1));
+	printf("###########battery_status : %d\r\n", battery_status);
+	printf("charge_remain_percentage : %d\r\n", charge_remain_percentage);
+	printf("avg_charge_current_reading : %d\r\n", (avg_charge_current_reading >> 4) & 0xff);
+	printf("avg_discharge_current_reading : %d\r\n", avg_discharge_current_reading);
+	//battery_data[6] = charge_remain_percentage;
+	//battery_data[7] = battery_status;
+	//battery_data[8] = charger_status;
+	//battery_data[9] = (uint8_t)((current_time.year >> 8) & 0xff);
+	//battery_data[10] = (uint8_t)(current_time.year & 0xff);
+	//battery_data[11] = current_time.month;
+	//battery_data[12] = current_time.day;
+	//battery_data[13] = current_time.hour;
+	//battery_data[14] = current_time.minute;
+	//battery_data[15] = current_time.second;
 	
 	avg_charge_current_reading = 0;
 	avg_discharge_current_reading = 0;
 	
 	uint8_t tx_data[20];
-	tx_data[0] = TX_TYPE_BATTERY_DATA;
-	tx_data[1] = BATTERY_DATA_LENGTH;
-	for (uint8_t i = 0; i<16; i++)
+	tx_data[0] = commandType_report;
+	tx_data[1] = commandAction_data;
+	for (uint8_t i = 0; i<6; i++)
 	{
 		tx_data[i+2] = battery_data[i];
 	}
-	can_fd_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0,tx_data);
+	can_send_standard_message(CAN_RX_STANDARD_FILTER_ID_1,tx_data,CONF_CAN_ELEMENT_DATA_SIZE);
 	//can_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0, tx_data, CONF_CAN_ELEMENT_DATA_SIZE);	
 	//uint8_t tx_data[20];
 	//tx_data[0] = START_FLAG;
@@ -462,9 +488,9 @@ void send_board_time_data(void)
 	{
 		tx_data[i+2] = time_data[i];
 	}
-	can_fd_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0,tx_data);
+	//can_fd_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0,tx_data);
 	//can_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0, tx_data, sizeof(tx_data));
-	
+	can_send_standard_message(CAN_RX_STANDARD_FILTER_ID_1,tx_data,CONF_CAN_ELEMENT_DATA_SIZE);
 	//tx_data[0] = START_FLAG;
 	//tx_data[1] = TX_TYPE_TIME_DATA;
 	//tx_data[2] = 7;
@@ -575,7 +601,9 @@ void battery_charge_calculation(uint8_t time)
 			dateReportFlag = 1;
 			avg_charge_current_reading_old = avg_charge_current_reading;
 		}
-		delta_charge += avg_charge_current_reading * 1000 * 10 / 4095 / 75 * time;
+		
+		//Calibration hand by hand to calculate the linear relation ship between adc_value and current
+		delta_charge += avg_charge_current_reading / 4 * time;
 	}
 	
 	if (discharge_sample_num > 0)
@@ -592,8 +620,8 @@ void battery_charge_calculation(uint8_t time)
 		delta_charge -= avg_discharge_current_reading * 1000 / 4095 / 5 * time;
 	}
 		
-	if ((((uint32_t)(delta_charge) > battery_capcity) && (charge_from_empty_flag == 1) ) ||
-		(((uint32_t)(0 - delta_charge) > battery_capcity) && (discharge_from_full_flag == 1)))
+	if ((((uint32_t)(delta_charge) > calibrated_battery_capacity) && (charge_from_empty_flag == 1) ) ||
+		(((uint32_t)(0 - delta_charge) > calibrated_battery_capacity) && (discharge_from_full_flag == 1)))
 	{
 		calibrated_battery_capacity = (uint32_t)(abs(delta_charge));
 	}
@@ -601,10 +629,17 @@ void battery_charge_calculation(uint8_t time)
 	if (delta_charge > 0)
 	{
 		charge_remain_percentage = delta_charge * 100 / calibrated_battery_capacity;
+		//printf("\n\r Delta_charge > 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
+		if (charge_remain_percentage > 100)
+		{
+			charge_remain_percentage = 100;
+		}
 	}
 	else
 	{
+		
 		charge_remain_percentage = (calibrated_battery_capacity + delta_charge) * 100 / calibrated_battery_capacity;
+		//printf("\n\r Delta_charge <= 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
 		if (charge_remain_percentage < 1)
 		{
 			charge_remain_percentage = 1;
@@ -640,6 +675,41 @@ static void configure_usart_cdc(void)
 
 
 // ******************************************* CAN CONFIG AND API*******************************************
+static void can_set_standard_filter_0(void)
+{
+	struct can_standard_message_filter_element sd_filter;
+
+	can_get_standard_message_filter_element_default(&sd_filter);
+	sd_filter.S0.bit.SFID2 = CAN_RX_STANDARD_FILTER_ID_0_BUFFER_INDEX;
+	sd_filter.S0.bit.SFID1 = CAN_RX_STANDARD_FILTER_ID_0;
+	sd_filter.S0.bit.SFEC =
+	CAN_STANDARD_MESSAGE_FILTER_ELEMENT_S0_SFEC_STRXBUF_Val;
+
+	can_set_rx_standard_filter(&can_instance, &sd_filter,
+	CAN_RX_STANDARD_FILTER_INDEX_0);
+	can_enable_interrupt(&can_instance, CAN_RX_BUFFER_NEW_MESSAGE);
+}
+
+
+static void can_send_standard_message(uint32_t id_value, uint8_t *data,
+uint32_t data_length)
+{
+	uint32_t i;
+	struct can_tx_element tx_element;
+
+	can_get_tx_buffer_element_defaults(&tx_element);
+	tx_element.T0.reg |= CAN_TX_ELEMENT_T0_STANDARD_ID(id_value);
+	tx_element.T1.bit.DLC = data_length;
+	for (i = 0; i < data_length; i++) {
+		tx_element.data[i] = *data;
+		data++;
+	}
+
+	can_set_tx_buffer_element(&can_instance, &tx_element,
+	CAN_TX_BUFFER_INDEX);
+	can_tx_transfer_request(&can_instance, 1 << CAN_TX_BUFFER_INDEX);
+}
+
 
 static void can_set_extended_filter_1(void)
 {
@@ -699,7 +769,7 @@ static void configure_can(void)
 	can_get_config_defaults(&config_can);
 	can_init(&can_instance, CAN_MODULE, &config_can);
 
-	can_enable_fd_mode(&can_instance);
+	//can_enable_fd_mode(&can_instance);
 	can_start(&can_instance);
 
 	/* Enable interrupts for this CAN module */
@@ -873,7 +943,7 @@ void configure_rtc_calendar(void)
 	
 	//[setup and initial RTC AND enable system event generate]
 	struct rtc_calendar_events calendar_event;
-	calendar_event.generate_event_on_periodic[6] = true;
+	calendar_event.generate_event_on_periodic[7] = true;
 	rtc_calendar_enable_events(&rtc_instance, &calendar_event);
 	
 	//! [enable]
@@ -887,13 +957,13 @@ void rtc_match_callback(void)
 	//printf("###### alarm ######\r\n");
 	
 	static uint8_t second_count = 1;
-	
+	int32_t temp_result = 0;
 	tsens_start_conversion();
 	do {
 		/* Wait for conversion to be done and read out temperature result */
 	} while (tsens_read(&temp_result) != STATUS_OK);
 	printf("temperature :" );
-	printf("%ld \r\n", temp_result);
+	printf("%d \r\n", temp_result);
 	
 	if (dateReportFlag == 1)
 	{
@@ -907,11 +977,11 @@ void rtc_match_callback(void)
 	
 	/* Set new alarm in 5 seconds */
 	alarm.mask = RTC_CALENDAR_ALARM_MASK_SEC;
-	alarm.time.second += 20;
+	alarm.time.second += 1;
 	alarm.time.second = alarm.time.second % 60;
 	
 	//forced data reporting every 10 seconds
-	if ((alarm.time.second % 10) == 0)
+	if ((alarm.time.second % 6) == 0)
 	{
 		dateReportFlag = 1;
 	}
@@ -996,7 +1066,7 @@ while (events_is_busy(&example_event)) {
 	/* Wait for channel */
 };
 
-	can_set_extended_filter_1();
+	can_set_standard_filter_0();
 //! [main_loop]
 	while(1) {
 		
@@ -1010,7 +1080,7 @@ while (events_is_busy(&example_event)) {
 			execute_system_command();
 		}
 		
-		
+		//send_board_time_data();
 		//switch (key) {
 		//case 'h':
 			//display_menu();
@@ -1069,6 +1139,7 @@ while (events_is_busy(&example_event)) {
 		//}
 		
 		//scanf("%c", (char *)&key);
+		//CONF_CLOCK_OSC48M_FREQ_DIV
 	}
 //! [main_loop]
 

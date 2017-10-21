@@ -10,7 +10,7 @@
 #define SYS_EVENT_INTERRUPT_HOOK_H_
 
 //[definition_event]
-#define CONF_EVENT_GENERATOR    EVSYS_ID_GEN_RTC_PER_6
+#define CONF_EVENT_GENERATOR    EVSYS_ID_GEN_RTC_PER_7
 #define CONF_EVENT_USER         EVSYS_ID_USER_DMAC_CH_0
 //[definition_event]
 
