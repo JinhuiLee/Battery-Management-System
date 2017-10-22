@@ -169,6 +169,7 @@ uint8_t dateReportFlag = 0;
 
 uint8_t commandReady = 0;
 
+uint32_t time_index = 0;
 
 static volatile bool main_b_cdc_enable = false;
 
@@ -178,6 +179,9 @@ volatile bool adc_read_done = false;
 uint16_t charge_signal_adc_result;
 //discharge current samples on the ain9>PB01
 uint16_t discharge_signal_adc_result;
+
+uint16_t adc_voltage, adc_current;
+
 //temperature result
 uint16_t temprerature_adc_result;
 
@@ -296,7 +300,7 @@ void configure_adc(void)
 
 	config_adc.clock_source = GCLK_GENERATOR_0;
 	config_adc.clock_prescaler = ADC_CLOCK_PRESCALER_DIV16;
-	config_adc.reference =  ADC_REFERENCE_INTVCC0;
+	config_adc.reference =  ADC_REFERENCE_AREFA;
 	config_adc.positive_input = ADC_POSITIVE_INPUT_PIN8;
 	config_adc.negative_input = ADC_NEGATIVE_INPUT_GND;
 	config_adc.sample_length = ADC_TEMP_SAMPLE_LENGTH;
@@ -311,61 +315,34 @@ void configure_adc(void)
 
 void adc_sampling(void)
 {
-	//uint8_t string1 = 0x0c;
-	//uint8_t string2 = 0x0d;
-
-	//************************************************************************
-	if (0 == charger_status)//charger not connected
-	{	charge_signal_adc_result = 0;
-		//**********************************for discharge signal*******************************
+		//PB08
 		adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN4);
 		adc_start_conversion(&adc_instance);
 		do {
 		// Wait for conversion to be done and read out result
-		} while (adc_read(&adc_instance, &discharge_signal_adc_result) == STATUS_BUSY);	
+		} while (adc_read(&adc_instance, &adc_voltage) == STATUS_BUSY);	
 		
-		printf("\n\r Discharge_signal_adc_result is: %d \r\n",discharge_signal_adc_result);
-		printf("\n\r Voltage is: %d mv \r\n",discharge_signal_adc_result*3000/4096);
-		printf("\n\r Current is: %d ma \r\n",discharge_signal_adc_result*3000/(4096*13));
- 		total_discharge_current += discharge_signal_adc_result;
-		discharge_sample_num ++;
-		//udi_cdc_write_buf(&string2,1);				
-		//udi_cdc_write_buf(&discharge_signal_adc_result,2);
-		//int16_t discharge_raw_result_signed;
-		//discharge_raw_result_signed = (int16_t)discharge_signal_adc_result;
-		//adc_discharge_signal_voltage = ((float)discharge_raw_result_signed * (float)ADC_REFERENCE_INT1V_VALUE)/(float)ADC_8BIT_FULL_SCALE_VALUE;
-	}
-	else
-	{
-		discharge_signal_adc_result = 0;
-		//*****************************for charge signal************************************
+		
+		printf("%d voltage %d \r\n", time_index, adc_voltage * 5000 / 4096);
+		
+		//PB09
 		adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN5);
 		adc_start_conversion(&adc_instance);
 		do {
 			// Wait for conversion to be done and read out result 
-		} while (adc_read(&adc_instance, &charge_signal_adc_result) == STATUS_BUSY);
-		
-		printf("\n\r Charge_signal_adc_result is: %d \r\n",charge_signal_adc_result);
-		printf("\n\r Voltage is: %d mv \r\n",charge_signal_adc_result*3000/(4096));
-		total_charge_current += charge_signal_adc_result;
-		charge_sample_num++;
-		//udi_cdc_write_buf(&string1,1);
-		//udi_cdc_write_buf(&charge_signal_adc_result,2);
-		//int16_t charge_raw_result_signed;
-		//charge_raw_result_signed = (int16_t)charge_signal_adc_result;
-		//adc_charge_signal_voltage = ((float)charge_raw_result_signed * (float)ADC_REFERENCE_INT1V_VALUE)/(float)ADC_8BIT_FULL_SCALE_VALUE;
-	}
+		} while (adc_read(&adc_instance, &adc_current) == STATUS_BUSY);
+		printf("%d current %d \r\n", time_index, adc_current * 5000 / 4096);
 }
 
 uint8_t battery_status_update(void)
 {
 	if (charger_status == 1)
 	{
-		printf("\n\rcharge_signal_adc_result %d \r\n",  charge_signal_adc_result);
+		//printf("\n\rcharge_signal_adc_result %d \r\n",  charge_signal_adc_result);
 		if (charge_signal_adc_result > 0x00ff)
 		{
 			battery_status = 1; //charging, battery is not full
-			printf("\n\r here*********** \n\r");
+			//printf("\n\r here*********** \n\r");
 			//the followed discharge is not from 100% remain.
 			discharge_from_full_flag = 0;
 		}
@@ -414,7 +391,7 @@ void ADC_event(struct events_resource *resource)
 void charger_detection(void)
 {
 	charger_status = port_pin_get_input_level(EXT1_PIN_5);
-	printf("charger_status %d \r\n", charger_status);
+	//printf("charger_status %d \r\n", charger_status);
 	port_pin_set_output_level(EXT1_PIN_6,charger_status);
 }
 
@@ -428,10 +405,10 @@ void send_battery_data(void)
 	battery_data[3] = (uint8_t)((temprerature_value >> 8) & 0xff);
 	battery_data[4] = (uint8_t)(charge_remain_percentage);
 	battery_data[5] = (uint8_t)((battery_status << 1) | (charger_status & 1));
-	printf("###########battery_status : %d\r\n", battery_status);
-	printf("charge_remain_percentage : %d\r\n", charge_remain_percentage);
-	printf("avg_charge_current_reading : %d\r\n", (avg_charge_current_reading >> 4) & 0xff);
-	printf("avg_discharge_current_reading : %d\r\n", avg_discharge_current_reading);
+	//printf("###########battery_status : %d\r\n", battery_status);
+	//printf("charge_remain_percentage : %d\r\n", charge_remain_percentage);
+	//printf("avg_charge_current_reading : %d\r\n", (avg_charge_current_reading >> 4) & 0xff);
+	//printf("avg_discharge_current_reading : %d\r\n", avg_discharge_current_reading);
 	//battery_data[6] = charge_remain_percentage;
 	//battery_data[7] = battery_status;
 	//battery_data[8] = charger_status;
@@ -517,7 +494,7 @@ void setTime(void)
 	time.hour   = commandData[4];
 	time.minute = commandData[5];
 	time.second = commandData[6];
-	printf( "year %d month %d day %d \r\n", time.year, time.month, time.day);
+	//printf( "year %d month %d day %d \r\n", time.year, time.month, time.day);
 	rtc_calendar_set_time(&rtc_instance, &time);
 }
 
@@ -566,7 +543,7 @@ void execute_system_command()
 {	
 	system_busy_flag = 1;
 	commandReady = 0;
-	printf("commandType == %d", commandType);
+	//printf("commandType == %d", commandType);
 	if(commandType == CMD_TYPE_REQUEST)
 	{	
 		requestAction[commandIndex]();		
@@ -583,7 +560,7 @@ void execute_system_command()
 
 void battery_charge_calculation(uint8_t time)
 {
-	printf("battery_charge_calculation\r\n");
+	//printf("battery_charge_calculation\r\n");
 	static uint16_t avg_charge_current_reading_old;
 	static uint16_t avg_discharge_current_reading_old;
 	static int32_t delta_charge; //total electrical charge that been charged into battery plus discharged from battery in unit of mAsec. 
@@ -629,7 +606,7 @@ void battery_charge_calculation(uint8_t time)
 	if (delta_charge > 0)
 	{
 		charge_remain_percentage = delta_charge * 100 / calibrated_battery_capacity;
-		//printf("\n\r Delta_charge > 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
+		////printf("\n\r Delta_charge > 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
 		if (charge_remain_percentage > 100)
 		{
 			charge_remain_percentage = 100;
@@ -639,7 +616,7 @@ void battery_charge_calculation(uint8_t time)
 	{
 		
 		charge_remain_percentage = (calibrated_battery_capacity + delta_charge) * 100 / calibrated_battery_capacity;
-		//printf("\n\r Delta_charge <= 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
+		////printf("\n\r Delta_charge <= 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
 		if (charge_remain_percentage < 1)
 		{
 			charge_remain_percentage = 1;
@@ -795,14 +772,14 @@ void CAN0_Handler(void)
 				can_get_rx_buffer_element(&can_instance, &rx_element_buffer,
 				rx_buffer_index);
 				if (rx_element_buffer.R0.bit.XTD) {
-					printf("\n\r Extended FD message received in Rx buffer. The received data is: \r\n");
+					//printf("\n\r Extended FD message received in Rx buffer. The received data is: \r\n");
 					} else {
-					printf("\n\r Standard FD message received in Rx buffer. The received data is: \r\n");
+					//printf("\n\r Standard FD message received in Rx buffer. The received data is: \r\n");
 				}
 				for (i = 0; i < CONF_CAN_ELEMENT_DATA_SIZE; i++) {
-					printf("  %d",rx_element_buffer.data[i]);
+					//printf("  %d",rx_element_buffer.data[i]);
 				}
-				printf("\r\n\r\n");
+				//printf("\r\n\r\n");
 			}
 		}
 	}
@@ -818,17 +795,17 @@ void CAN0_Handler(void)
 			standard_receive_index = 0;
 		}
 		if (rx_element_fifo_0.R1.bit.FDF) {
-			printf("\n\r Standard FD message received in FIFO 0. The received data is: \r\n");
+			//printf("\n\r Standard FD message received in FIFO 0. The received data is: \r\n");
 			for (i = 0; i < CONF_CAN_ELEMENT_DATA_SIZE; i++) {
-				printf("  %d",rx_element_fifo_0.data[i]);
+				//printf("  %d",rx_element_fifo_0.data[i]);
 			}
 			} else {
-			printf("\n\r Standard normal message received in FIFO 0. The received data is: \r\n");
+			//printf("\n\r Standard normal message received in FIFO 0. The received data is: \r\n");
 			for (i = 0; i < rx_element_fifo_0.R1.bit.DLC; i++) {
-				printf("  %d",rx_element_fifo_0.data[i]);
+				//printf("  %d",rx_element_fifo_0.data[i]);
 			}
 		}
-		printf("\r\n\r\n");
+		//printf("\r\n\r\n");
 	}
 
 	if (status & CAN_RX_FIFO_1_NEW_MESSAGE) {
@@ -842,20 +819,20 @@ void CAN0_Handler(void)
 			extended_receive_index = 0;
 		}
 
-		printf("\n\r Extended FD message received in FIFO 1. The received data is: \r\n");
+		//printf("\n\r Extended FD message received in FIFO 1. The received data is: \r\n");
 		for (i = 0; i < CONF_CAN_ELEMENT_DATA_SIZE; i++) {
 			commandMsg[i] = rx_element_fifo_1.data[i];
-			printf("  %d",rx_element_fifo_1.data[i]);
+			//printf("  %d",rx_element_fifo_1.data[i]);
 		}
 		canMsgInFlag = 1;
-		printf("\r\n\r\n");
+		//printf("\r\n\r\n");
 	}
 
 	if ((status & CAN_PROTOCOL_ERROR_ARBITRATION)
 	|| (status & CAN_PROTOCOL_ERROR_DATA)) {
 		can_clear_interrupt_status(&can_instance, CAN_PROTOCOL_ERROR_ARBITRATION
 		| CAN_PROTOCOL_ERROR_DATA);
-		printf("Protocol error, please double check the clock in two boards. \r\n\r\n");
+		//printf("Protocol error, please double check the clock in two boards. \r\n\r\n");
 	}
 }
 //! [can_interrupt_handler]
@@ -910,7 +887,7 @@ void event_counter(struct events_resource *resource)
 {
 	if(events_is_interrupt_set(resource, EVENTS_INTERRUPT_DETECT)) {
 		port_pin_toggle_output_level(LED_0_PIN);
-		//printf("@@@@@@@@@@@@@@@@@@@@@@@@@ event success @@@@@@@@@@@@@@@@@@@@@@@@ \r\n");
+		////printf("@@@@@@@@@@@@@@@@@@@@@@@@@ event success @@@@@@@@@@@@@@@@@@@@@@@@ \r\n");
 		event_count++;
 		
 		events_ack_interrupt(resource, EVENTS_INTERRUPT_DETECT);
@@ -954,7 +931,7 @@ struct rtc_calendar_alarm_time alarm;
 void rtc_match_callback(void)
 {
 	/* Do something on RTC alarm match here */
-	//printf("###### alarm ######\r\n");
+	////printf("###### alarm ######\r\n");
 	
 	static uint8_t second_count = 1;
 	int32_t temp_result = 0;
@@ -962,14 +939,15 @@ void rtc_match_callback(void)
 	do {
 		/* Wait for conversion to be done and read out temperature result */
 	} while (tsens_read(&temp_result) != STATUS_OK);
-	printf("temperature :" );
-	printf("%d \r\n", temp_result);
+	//printf("temperature :" );
+	//printf("%d \r\n", temp_result);
 	
 	if (dateReportFlag == 1)
 	{
 		battery_charge_calculation(second_count);
 		second_count = 1;
 		send_battery_data();
+		//printf("%d %d\r\n", time_index++, adc_value * 5000 / 4096);
 		//reset flags
 		dateReportFlag = 0;
 	}
@@ -981,7 +959,7 @@ void rtc_match_callback(void)
 	alarm.time.second = alarm.time.second % 60;
 	
 	//forced data reporting every 10 seconds
-	if ((alarm.time.second % 6) == 0)
+	if ((alarm.time.second % 5) == 0)
 	{
 		dateReportFlag = 1;
 	}
@@ -1072,7 +1050,7 @@ while (events_is_busy(&example_event)) {
 		
 		
 		if (1==canMsgInFlag){
-			printf("Command Received!\r\n");
+			//printf("Command Received!\r\n");
 			processCommandMsg();
 		}
 		if ((0 == system_busy_flag) && (1 == commandReady))
@@ -1087,50 +1065,50 @@ while (events_is_busy(&example_event)) {
 			//break;
 //
 		//case '0':
-			//printf("  0: Set standard filter ID 0: 0x45A, store into Rx buffer. \r\n");
+			////printf("  0: Set standard filter ID 0: 0x45A, store into Rx buffer. \r\n");
 			//can_set_standard_filter_0();
 			//break;
 //
 		//case '1':
-			//printf("  1: Set standard filter ID 1: 0x469, store into Rx FIFO 0. \r\n");
+			////printf("  1: Set standard filter ID 1: 0x469, store into Rx FIFO 0. \r\n");
 			//can_set_standard_filter_1();
 			//break;
 //
 		//case '2':
-			//printf("  2: Send standard message with ID: 0x45A and 4 byte data 0 to 3. \r\n");
+			////printf("  2: Send standard message with ID: 0x45A and 4 byte data 0 to 3. \r\n");
 			//can_send_standard_message(CAN_RX_STANDARD_FILTER_ID_0, tx_message_0,
 					//CONF_CAN_ELEMENT_DATA_SIZE / 2);
 			//break;
 //
 		//case '3':
-			//printf("  3: Send standard message with ID: 0x469 and 4 byte data 128 to 131. \r\n");
+			////printf("  3: Send standard message with ID: 0x469 and 4 byte data 128 to 131. \r\n");
 			//can_send_standard_message(CAN_RX_STANDARD_FILTER_ID_1, tx_message_1,
 					//CONF_CAN_ELEMENT_DATA_SIZE / 2);
 			//break;
 //
 		//case '4':
-			//printf("  4: Set extended filter ID 0: 0x100000A5, store into Rx buffer. \r\n");
+			////printf("  4: Set extended filter ID 0: 0x100000A5, store into Rx buffer. \r\n");
 			//can_set_extended_filter_0();
 			//break;
 //
 		//case '5':
-			//printf("  5: Set extended filter ID 1: 0x10000096, store into Rx FIFO 1. \r\n");
+			////printf("  5: Set extended filter ID 1: 0x10000096, store into Rx FIFO 1. \r\n");
 			//can_set_extended_filter_1();
 			//break;
 //
 		//case '6':
-			//printf("  6: Send extended message with ID: 0x100000A5 and 8 byte data 0 to 7. \r\n");
+			////printf("  6: Send extended message with ID: 0x100000A5 and 8 byte data 0 to 7. \r\n");
 			//can_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_0, tx_message_0,
 					//CONF_CAN_ELEMENT_DATA_SIZE);
 			//break;
 //
 		//case '7':
-			//printf("  7: Send extended message with ID: 0x10000096 and 8 byte data 128 to 135. \r\n");
+			////printf("  7: Send extended message with ID: 0x10000096 and 8 byte data 128 to 135. \r\n");
 			//can_send_extended_message(CAN_RX_EXTENDED_FILTER_ID_1, tx_message_1,
 					//CONF_CAN_ELEMENT_DATA_SIZE);
 			//break;
 		//case '8':
-			//printf("  8: Test adc_sampling() function \r\n");
+			////printf("  8: Test adc_sampling() function \r\n");
 			//adc_sampling();
 		//break;
 //
