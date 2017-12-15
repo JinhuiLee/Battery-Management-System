@@ -63,6 +63,9 @@
 #include <compiler.h>
 #include <status_codes.h>
 
+// From module: DAC - Digital-to-Analog Converter (Polled APIs)
+#include <dac.h>
+
 // From module: EVSYS - Event System Common
 #include <events.h>
 

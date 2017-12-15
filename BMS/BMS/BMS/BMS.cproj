@@ -30,17 +30,18 @@
       <framework-data>
         <options>
           <option id="common.boards" value="Add" config="" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.can" value="Add" config="" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.port" value="Add" config="" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.sercom.usart" value="Add" config="callback" content-id="Atmel.ASF" />
-          <option id="sam0.utils.stdio.stdio_serial" value="Add" config="" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.adc" value="Add" config="callback" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.events" value="Add" config="hook" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.rtc" value="Add" config="calendar_callback" content-id="Atmel.ASF" />
           <option id="common.services.basic.serial" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.adc" value="Add" config="callback" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.can" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.events" value="Add" config="hook" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.nvm" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.port" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.rtc" value="Add" config="calendar_callback" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.sercom.usart" value="Add" config="callback" content-id="Atmel.ASF" />
           <option id="sam0.drivers.tcc" value="Add" config="callback" content-id="Atmel.ASF" />
           <option id="sam0.drivers.tsens" value="Add" config="callback" content-id="Atmel.ASF" />
-          <option id="sam0.drivers.nvm" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.utils.stdio.stdio_serial" value="Add" config="" content-id="Atmel.ASF" />
+          <option id="sam0.drivers.dac" value="Add" config="polled" content-id="Atmel.ASF" />
           <option id="common.utils" value="Add" config="" content-id="Atmel.ASF" />
           <option id="sam0.drivers.can.quick_start_fd" value="Add" config="" content-id="Atmel.ASF" />
           <option id="sam0.utils" value="Add" config="" content-id="Atmel.ASF" />
@@ -259,6 +260,9 @@
           <file path="src/ASF/sam0/drivers/tsens/tsens_callback.c" framework="" version="3.32.0" source="sam0\drivers\tsens\tsens_callback.c" changed="False" content-id="Atmel.ASF" />
           <file path="src/ASF/sam0/drivers/tsens/tsens.h" framework="" version="3.32.0" source="sam0\drivers\tsens\tsens.h" changed="False" content-id="Atmel.ASF" />
           <file path="src/ASF/sam0/drivers/tsens/tsens_callback.h" framework="" version="3.32.0" source="sam0\drivers\tsens\tsens_callback.h" changed="False" content-id="Atmel.ASF" />
+          <file path="src/ASF/sam0/drivers/dac/dac_sam_d_c/dac.c" framework="" version="3.32.0" source="sam0\drivers\dac\dac_sam_d_c\dac.c" changed="False" content-id="Atmel.ASF" />
+          <file path="src/ASF/sam0/drivers/dac/dac_sam_d_c/dac_feature.h" framework="" version="3.32.0" source="sam0\drivers\dac\dac_sam_d_c\dac_feature.h" changed="False" content-id="Atmel.ASF" />
+          <file path="src/ASF/sam0/drivers/dac/dac.h" framework="" version="3.32.0" source="sam0\drivers\dac\dac.h" changed="False" content-id="Atmel.ASF" />
         </files>
         <documentation help="" />
         <offline-documentation help="" />
@@ -306,6 +310,7 @@
       <Value>RTC_CALENDAR_ASYNC=true</Value>
       <Value>TCC_ASYNC=true</Value>
       <Value>TSENS_CALLBACK_MODE=true</Value>
+      <Value>DAC_CALLBACK_MODE=false</Value>
     </ListValues>
   </armgcc.compiler.symbols.DefSymbols>
   <armgcc.compiler.directories.IncludePaths>
@@ -348,6 +353,8 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.compiler.directories.IncludePaths>
   <armgcc.compiler.optimization.level>Optimize for size (-Os)</armgcc.compiler.optimization.level>
@@ -409,9 +416,11 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.assembler.general.IncludePaths>
-  <armgcc.preprocessingassembler.general.AssemblerFlags>-DARM_MATH_CM0PLUS=true -DBOARD=SAMC21_XPLAINED_PRO -DUSART_CALLBACK_MODE=true -D__SAMC21J18A__ -DADC_CALLBACK_MODE=true -DEVENTS_INTERRUPT_HOOKS_MODE=true -DRTC_CALENDAR_ASYNC=true -DTCC_ASYNC=true -DTSENS_CALLBACK_MODE=true</armgcc.preprocessingassembler.general.AssemblerFlags>
+  <armgcc.preprocessingassembler.general.AssemblerFlags>-DARM_MATH_CM0PLUS=true -DBOARD=SAMC21_XPLAINED_PRO -DUSART_CALLBACK_MODE=true -D__SAMC21J18A__ -DADC_CALLBACK_MODE=true -DEVENTS_INTERRUPT_HOOKS_MODE=true -DRTC_CALENDAR_ASYNC=true -DTCC_ASYNC=true -DTSENS_CALLBACK_MODE=true -DDAC_CALLBACK_MODE=false</armgcc.preprocessingassembler.general.AssemblerFlags>
   <armgcc.preprocessingassembler.general.IncludePaths>
     <ListValues>
       <Value>../src/ASF/sam0/boards</Value>
@@ -452,6 +461,8 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.preprocessingassembler.general.IncludePaths>
 </ArmGcc>
@@ -477,6 +488,7 @@
       <Value>RTC_CALENDAR_ASYNC=true</Value>
       <Value>TCC_ASYNC=true</Value>
       <Value>TSENS_CALLBACK_MODE=true</Value>
+      <Value>DAC_CALLBACK_MODE=false</Value>
     </ListValues>
   </armgcc.compiler.symbols.DefSymbols>
   <armgcc.compiler.directories.IncludePaths>
@@ -519,6 +531,8 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.compiler.directories.IncludePaths>
   <armgcc.compiler.optimization.level>Optimize (-O1)</armgcc.compiler.optimization.level>
@@ -581,10 +595,12 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.assembler.general.IncludePaths>
   <armgcc.assembler.debugging.DebugLevel>Default (-g)</armgcc.assembler.debugging.DebugLevel>
-  <armgcc.preprocessingassembler.general.AssemblerFlags>-DARM_MATH_CM0PLUS=true -DBOARD=SAMC21_XPLAINED_PRO -DUSART_CALLBACK_MODE=true -D__SAMC21J18A__ -DADC_CALLBACK_MODE=true -DEVENTS_INTERRUPT_HOOKS_MODE=true -DRTC_CALENDAR_ASYNC=true -DTCC_ASYNC=true -DTSENS_CALLBACK_MODE=true</armgcc.preprocessingassembler.general.AssemblerFlags>
+  <armgcc.preprocessingassembler.general.AssemblerFlags>-DARM_MATH_CM0PLUS=true -DBOARD=SAMC21_XPLAINED_PRO -DUSART_CALLBACK_MODE=true -D__SAMC21J18A__ -DADC_CALLBACK_MODE=true -DEVENTS_INTERRUPT_HOOKS_MODE=true -DRTC_CALENDAR_ASYNC=true -DTCC_ASYNC=true -DTSENS_CALLBACK_MODE=true -DDAC_CALLBACK_MODE=false</armgcc.preprocessingassembler.general.AssemblerFlags>
   <armgcc.preprocessingassembler.general.IncludePaths>
     <ListValues>
       <Value>../src/ASF/sam0/boards</Value>
@@ -625,6 +641,8 @@
       <Value>../src/ASF/sam0/drivers/rtc/rtc_sam_l_c</Value>
       <Value>../src/ASF/sam0/drivers/tcc</Value>
       <Value>../src/ASF/sam0/drivers/tsens</Value>
+      <Value>../src/ASF/sam0/drivers/dac</Value>
+      <Value>../src/ASF/sam0/drivers/dac/dac_sam_d_c</Value>
     </ListValues>
   </armgcc.preprocessingassembler.general.IncludePaths>
   <armgcc.preprocessingassembler.debugging.DebugLevel>Default (-Wa,-g)</armgcc.preprocessingassembler.debugging.DebugLevel>
@@ -650,6 +668,8 @@
     <Folder Include="src\ASF\sam0\drivers\can\" />
     <Folder Include="src\ASF\sam0\drivers\can\quick_start\" />
     <Folder Include="src\ASF\sam0\drivers\can\quick_start_fd\" />
+    <Folder Include="src\ASF\sam0\drivers\dac\" />
+    <Folder Include="src\ASF\sam0\drivers\dac\dac_sam_d_c\" />
     <Folder Include="src\ASF\sam0\drivers\events\" />
     <Folder Include="src\ASF\sam0\drivers\events\events_sam_l_c\" />
     <Folder Include="src\ASF\sam0\drivers\nvm\" />
@@ -717,6 +737,15 @@
     <Compile Include="src\ASF\sam0\drivers\adc\adc_sam_l_c\adc_callback.c">
       <SubType>compile</SubType>
     </Compile>
+    <None Include="src\ASF\sam0\drivers\dac\dac.h">
+      <SubType>compile</SubType>
+    </None>
+    <Compile Include="src\ASF\sam0\drivers\dac\dac_sam_d_c\dac.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <None Include="src\ASF\sam0\drivers\dac\dac_sam_d_c\dac_feature.h">
+      <SubType>compile</SubType>
+    </None>
     <Compile Include="src\ASF\sam0\drivers\rtc\rtc_sam_l_c\rtc_calendar.c">
       <SubType>compile</SubType>
     </Compile>

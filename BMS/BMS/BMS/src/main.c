@@ -107,6 +107,10 @@ static struct can_rx_element_buffer rx_element_buffer;
 //![temperature result]
 //int32_t temp_result;
 
+static int32_t delta_charge; //total electrical charge that been charged into battery plus discharged from battery in unit of mAsec.
+
+
+
 enum commandType {
 	commandType_null,
 	commandType_set,
@@ -176,9 +180,11 @@ static volatile bool main_b_cdc_enable = false;
 volatile bool adc_read_done = false;
 
 //charge current samples on the ain8>PB00
-uint16_t charge_signal_adc_result;
+uint16_t charge_current_adc_result;
 //discharge current samples on the ain9>PB01
-uint16_t discharge_signal_adc_result;
+uint16_t charge_voltage_adc_result;
+
+uint16_t discharge_current_adc_result;
 
 uint16_t adc_voltage, adc_current;
 
@@ -211,8 +217,8 @@ uint64_t total_discharge_current = 0;
 uint32_t charge_sample_num = 0;
 uint32_t discharge_sample_num = 0;
 
-uint32_t battery_capcity = 540000; //listed total battery capacity in unit of mAsec
-uint32_t calibrated_battery_capacity = 540000;
+uint32_t battery_capcity = 12240000; //listed total battery capacity in unit of mAsec
+uint32_t calibrated_battery_capacity = 12240000;
 
 int8_t charge_remain_percentage = 0;    // ?% of total capacity x 100;
 
@@ -223,6 +229,9 @@ uint8_t	discharge_from_full_flag = 0;
 
 //! [adc_module_inst]
 struct adc_module adc_instance;
+
+//! [dac_module_inst]
+struct dac_module dac_instance;
 
 //! [rtc_module_instance]
 struct rtc_module rtc_instance;
@@ -282,11 +291,14 @@ void configure_port_pins(void)
 	
 	
 	//set EXT1_PIN_5(PIN_PA20) as input for charger detect, 1 for charger present/0 for charge not present
-	port_pin_set_config(EXT1_PIN_5, &config_port_pin);
+	
 	
 	//set EXT1_PIN_6(PIN_PA21) as LED output, on for charger present/off for charger not present
+	//set EXT1_PIN_13(PIN_PA13) as LED output, on for charger present/off for charger not present
 	config_port_pin.direction = PORT_PIN_DIR_OUTPUT;
+	port_pin_set_config(EXT1_PIN_5, &config_port_pin);
 	port_pin_set_config(EXT1_PIN_6, &config_port_pin);
+	//port_pin_set_config(EXT1_PIN_13, &config_port_pin);
 }
 
 //! [setup ADC]
@@ -313,49 +325,95 @@ void configure_adc(void)
 	adc_enable(&adc_instance);
 }
 
+void configure_dac(void)
+{
+	struct dac_config config_dac;
+	dac_get_config_defaults(&config_dac);
+	config_dac.reference = DAC_REFERENCE_AVCC;
+	dac_init(&dac_instance, DAC, &config_dac);
+}
+void configure_dac_channel(void)
+{
+	struct dac_chan_config config_dac_chan;
+	dac_chan_get_config_defaults(&config_dac_chan);
+	dac_chan_set_config(&dac_instance, DAC_CHANNEL_0, &config_dac_chan);
+	dac_chan_enable(&dac_instance, DAC_CHANNEL_0);
+	dac_enable(&dac_instance);
+}
+
+
+
+uint8_t adc_detect(uint16_t value) {
+	uint16_t vol = 0;
+	adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN11);
+	adc_start_conversion(&adc_instance);
+	do {
+		// Wait for conversion to be done and read out result
+	} while (adc_read(&adc_instance, &vol) == STATUS_BUSY);
+	vol = vol * 5000 / 4096;
+	//printf("adc_detect %d\n", vol);
+	return (vol > value)? 1 : 0;
+};
+
+
+
+
 void adc_sampling(void)
 {
-		//PB08
+	//if (charger_status == 1) {
+		//PB08-ADC_POSITIVE_INPUT_PIN4
 		adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN4);
 		adc_start_conversion(&adc_instance);
 		do {
 		// Wait for conversion to be done and read out result
-		} while (adc_read(&adc_instance, &adc_voltage) == STATUS_BUSY);	
+		} while (adc_read(&adc_instance, &charge_voltage_adc_result) == STATUS_BUSY);	
 		
 		
-		printf("%d voltage %d \r\n", time_index, adc_voltage * 5000 / 4096);
 		
-		//PB09
+		//PB09-ADC_POSITIVE_INPUT_PIN5
 		adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN5);
 		adc_start_conversion(&adc_instance);
 		do {
 			// Wait for conversion to be done and read out result 
-		} while (adc_read(&adc_instance, &adc_current) == STATUS_BUSY);
-		printf("%d current %d \r\n", time_index, adc_current * 5000 / 4096);
+		} while (adc_read(&adc_instance, &charge_current_adc_result) == STATUS_BUSY);
+		//printf("%d current %d \r\n", time_index, adc_current * 5000 / 4096);
+		
+		charge_sample_num++;
+		total_charge_current += (charge_current_adc_result * 5000) / 4096 / 2;
+	//} else {
+		//A2
+		adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN10);
+		adc_start_conversion(&adc_instance);
+		do {
+		// Wait for conversion to be done and read out result
+		} while (adc_read(&adc_instance, &discharge_current_adc_result) == STATUS_BUSY);
+		discharge_sample_num ++;	
+		total_discharge_current += (discharge_current_adc_result * 5000) / 4096 / 2;
+	//}
 }
 
 uint8_t battery_status_update(void)
 {
 	if (charger_status == 1)
 	{
-		//printf("\n\rcharge_signal_adc_result %d \r\n",  charge_signal_adc_result);
-		if (charge_signal_adc_result > 0x00ff)
+		//printf("\n\rcharge_current_adc_result %d \r\n",  charge_current_adc_result);
+		if (charge_current_adc_result > 0x00ff)
 		{
 			battery_status = 1; //charging, battery is not full
 			//printf("\n\r here*********** \n\r");
 			//the followed discharge is not from 100% remain.
 			discharge_from_full_flag = 0;
 		}
-		else if (charge_signal_adc_result < 0x20)
+		else if (charge_current_adc_result < 0x20)
 		{
 			battery_status = 0;//no current in/out for battery, battery is full
-			charge_signal_adc_result = 0;
+			charge_current_adc_result = 0;
 			//the follow discharge will be from 100% remain, set the discharge_from_full_flag = 1
 			discharge_from_full_flag = 1;
 		}
 	}
 	//need to add in self-discharge control logic and self-discharge to empty function
-	else if (discharge_signal_adc_result > 0xff)
+	else if (charge_voltage_adc_result > 0xff)
 	{
 		battery_status = 2;    //discharging
 		charge_from_empty_flag = 0;
@@ -363,7 +421,7 @@ uint8_t battery_status_update(void)
 	else //battery is empty
 	{
 		battery_status = 0;
-		discharge_signal_adc_result = 0;
+		charge_voltage_adc_result = 0;
 		charge_from_empty_flag = 1;	
 	}
 	return battery_status;
@@ -387,12 +445,33 @@ void ADC_event(struct events_resource *resource)
 	}
 }
 
+
+
 //charger detect function
 void charger_detection(void)
-{
-	charger_status = port_pin_get_input_level(EXT1_PIN_5);
-	//printf("charger_status %d \r\n", charger_status);
-	port_pin_set_output_level(EXT1_PIN_6,charger_status);
+{	
+	
+	charger_status = adc_detect(4200);
+	adc_sampling();
+	//printf("charger_status %d %d\r\n", charger_status, !charger_status);
+	
+	if (charger_status == 1) {
+		charge_remain_percentage = delta_charge * 100 / calibrated_battery_capacity;
+		//printf("\n\r Delta_charge > 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
+		uint32_t voltage = (charge_voltage_adc_result <= charge_current_adc_result) ? 0 : (charge_voltage_adc_result - charge_current_adc_result) * 5000 / 4096;
+		if (charge_remain_percentage > 95 || voltage >= 4200)
+		{
+			printf("\n\r Cutting off the charging circuit \r\n");
+			port_pin_set_output_level(EXT1_PIN_6, 0);
+		} else {
+			port_pin_set_output_level(EXT1_PIN_6, 1);
+		}
+	} else {
+		port_pin_set_output_level(EXT1_PIN_6, 0);
+	}
+	port_pin_set_output_level(EXT1_PIN_5,!charger_status);
+	
+	
 }
 
 void send_battery_data(void)
@@ -563,13 +642,16 @@ void battery_charge_calculation(uint8_t time)
 	//printf("battery_charge_calculation\r\n");
 	static uint16_t avg_charge_current_reading_old;
 	static uint16_t avg_discharge_current_reading_old;
-	static int32_t delta_charge; //total electrical charge that been charged into battery plus discharged from battery in unit of mAsec. 
-
+	
 	int16_t diff = 0;
 	
-	if (charge_sample_num >0)
+	if (charger_status == 1 && charge_sample_num >0)
 	{
+		//printf("total_charge_current: %d\r\n", total_charge_current);
 		avg_charge_current_reading = (uint16_t)(total_charge_current / charge_sample_num);
+		
+		//printf("charge_sample_num: %d\r\n", charge_sample_num);
+		//printf("avg_charge_current_reading: %d\r\n", avg_charge_current_reading);
 		total_charge_current = 0;
 		charge_sample_num = 0;
 		diff = (int16_t)(avg_charge_current_reading - avg_charge_current_reading_old);
@@ -580,10 +662,9 @@ void battery_charge_calculation(uint8_t time)
 		}
 		
 		//Calibration hand by hand to calculate the linear relation ship between adc_value and current
-		delta_charge += avg_charge_current_reading / 4 * time;
-	}
-	
-	if (discharge_sample_num > 0)
+		delta_charge += avg_charge_current_reading * time;
+		//printf("delta_charge: %d\r\n", delta_charge);
+	} else if (discharge_sample_num > 0)
 	{	
 		avg_discharge_current_reading = (uint16_t)(total_discharge_current / discharge_sample_num);
 		total_discharge_current = 0;
@@ -594,29 +675,35 @@ void battery_charge_calculation(uint8_t time)
 			dateReportFlag = 1;
 			avg_discharge_current_reading_old = avg_discharge_current_reading;
 		}
-		delta_charge -= avg_discharge_current_reading * 1000 / 4095 / 5 * time;
-	}
+		delta_charge -= avg_discharge_current_reading * time;
 		
-	if ((((uint32_t)(delta_charge) > calibrated_battery_capacity) && (charge_from_empty_flag == 1) ) ||
-		(((uint32_t)(0 - delta_charge) > calibrated_battery_capacity) && (discharge_from_full_flag == 1)))
-	{
-		calibrated_battery_capacity = (uint32_t)(abs(delta_charge));
 	}
 	
-	if (delta_charge > 0)
+	delta_charge = max(0, delta_charge);
+	//if ((((uint32_t)(delta_charge) > calibrated_battery_capacity) && (charge_from_empty_flag == 1) ) ||
+		//(((uint32_t)(0 - delta_charge) > calibrated_battery_capacity) && (discharge_from_full_flag == 1)))
+	//{
+		//calibrated_battery_capacity = (uint32_t)(abs(delta_charge));
+	//}
+	
+	if (delta_charge >= 0)
 	{
 		charge_remain_percentage = delta_charge * 100 / calibrated_battery_capacity;
-		////printf("\n\r Delta_charge > 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
-		if (charge_remain_percentage > 100)
+		printf("#Delta_charge >= 0. It is: %d | per : %d\n", delta_charge, charge_remain_percentage);
+		uint32_t voltage = (charge_voltage_adc_result <= charge_current_adc_result) ? 0 : (charge_voltage_adc_result - charge_current_adc_result) * 5000 / 4096;
+		if (charge_remain_percentage > 95 || voltage >= 4200)
 		{
-			charge_remain_percentage = 100;
+			printf("#Cutting off the charging circuit\n");
+			port_pin_set_output_level(EXT1_PIN_6, 0);
+		} else {
+			port_pin_set_output_level(EXT1_PIN_6, 1);
 		}
 	}
 	else
 	{
 		
 		charge_remain_percentage = (calibrated_battery_capacity + delta_charge) * 100 / calibrated_battery_capacity;
-		////printf("\n\r Delta_charge <= 0. It is: %d | per : %d \r\n", delta_charge, charge_remain_percentage);
+		printf("#Delta_charge < 0. It is: %d | per : %d\n", delta_charge, charge_remain_percentage);
 		if (charge_remain_percentage < 1)
 		{
 			charge_remain_percentage = 1;
@@ -942,12 +1029,19 @@ void rtc_match_callback(void)
 	//printf("temperature :" );
 	//printf("%d \r\n", temp_result);
 	
+	
 	if (dateReportFlag == 1)
-	{
-		battery_charge_calculation(second_count);
+	{	
 		second_count = 1;
 		send_battery_data();
-		//printf("%d %d\r\n", time_index++, adc_value * 5000 / 4096);
+		battery_charge_calculation(5);
+		if (charger_status == 1) {
+			printf("%d voltage %d \r\n", time_index, charge_voltage_adc_result * 5000 / 4096);
+			printf("%d c_current %d \r\n", time_index, charge_current_adc_result * 5000 / 4096);
+		} else {
+			printf("%d voltage %d \r\n", time_index, charge_voltage_adc_result * 5000 / 4096);
+			printf("%d d_current %d \r\n\r\n", time_index++, discharge_current_adc_result * 5000 / 4096);
+		}
 		//reset flags
 		dateReportFlag = 0;
 	}
@@ -991,7 +1085,27 @@ void configure_tsens(void)
 	tsens_enable();
 }
 
-
+void battery_init(){
+	//PB08
+	adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN4);
+	adc_start_conversion(&adc_instance);
+	do {
+		// Wait for conversion to be done and read out result
+	} while (adc_read(&adc_instance, &charge_voltage_adc_result) == STATUS_BUSY);
+	
+	//PB09
+	adc_set_positive_input(&adc_instance,ADC_POSITIVE_INPUT_PIN5);
+	adc_start_conversion(&adc_instance);
+	do {
+		// Wait for conversion to be done and read out result
+	} while (adc_read(&adc_instance, &charge_current_adc_result) == STATUS_BUSY);
+	//printf("%d current %d \r\n", time_index, adc_current * 5000 / 4096);
+	delta_charge = 0;
+	uint32_t voltage = (charge_voltage_adc_result <= charge_current_adc_result) ? 0 : (charge_voltage_adc_result - charge_current_adc_result) * 5000 / 4096;
+	printf("Voltage %d \r\n", voltage);
+	//delta_charge  = (voltage > 3000) ?  (voltage - 3000)  * calibrated_battery_capacity / 1200  : 0;
+	printf("Initial delta_charge %d \r\n", delta_charge);
+}
 
 
 //! [setup]
@@ -1040,14 +1154,30 @@ int main(void)
 	//display_menu();
 //! [display_user_menu]
 
+
+	configure_dac();
+	configure_dac_channel();
+	
+	
+
 while (events_is_busy(&example_event)) {
 	/* Wait for channel */
 };
 
 	can_set_standard_filter_0();
+	
+	battery_init();
+	
+	// open the Mosfet switch
+	port_pin_set_output_level(EXT1_PIN_6, 1);
+	uint16_t i = 0x3ff;
+	
 //! [main_loop]
 	while(1) {
-		
+		dac_chan_write(&dac_instance, DAC_CHANNEL_0, i/2);
+		//if (++i == 0x3ff) {
+			//i = 0;
+		//}
 		
 		if (1==canMsgInFlag){
 			//printf("Command Received!\r\n");
